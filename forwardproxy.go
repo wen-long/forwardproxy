@@ -236,6 +236,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyht
 		reqHost = r.Host // OK; probably just didn't have a port
 	}
 
+	auth, password, ok := r.BasicAuth()
+	fmt.Print(r.RequestURI, r.Host, r.URL, auth, password, ok)
+
 	var authErr error
 	if h.authRequired {
 		authErr = h.checkCredentials(r)
