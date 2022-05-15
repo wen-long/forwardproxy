@@ -230,14 +230,14 @@ func (h *Handler) Provision(ctx caddy.Context) error {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+	auth, password, ok := r.BasicAuth()
+	fmt.Println(r.RequestURI, r.Host, r.URL, auth, password, ok)
+
 	// start by splitting the request host and port
 	reqHost, _, err := net.SplitHostPort(r.Host)
 	if err != nil {
 		reqHost = r.Host // OK; probably just didn't have a port
 	}
-
-	auth, password, ok := r.BasicAuth()
-	fmt.Print(r.RequestURI, r.Host, r.URL, auth, password, ok)
 
 	var authErr error
 	if h.authRequired {
