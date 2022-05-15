@@ -226,6 +226,7 @@ func (h *Handler) Provision(ctx caddy.Context) error {
 		}
 	}
 
+	fmt.Println(h.ACL, h.BasicauthPass, h.BasicauthPass, h.aclRules, h.Hosts)
 	return nil
 }
 
