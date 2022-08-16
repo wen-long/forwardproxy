@@ -501,16 +501,16 @@ func (h Handler) dialContextCheckACL(ctx context.Context, network, hostPort stri
 	// Dial will try each IP address in order until one succeeds
 	for _, ip := range IPs {
 		if !h.hostIsAllowed(host, ip) {
-			continue
-		}
-
-		conn, err = h.dialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-		if err == nil {
-			return conn, nil
+			return nil, caddyhttp.Error(http.StatusForbidden, fmt.Errorf("no allowed IP addresses for %s", host))
 		}
 	}
 
-	return nil, caddyhttp.Error(http.StatusForbidden, fmt.Errorf("no allowed IP addresses for %s", host))
+	// this should follow gai.conf rules
+	conn, err = h.dialContext(ctx, network, hostPort)
+	if err == nil {
+		return conn, nil
+	}
+	return nil, nil
 }
 
 func (h Handler) hostIsAllowed(hostname string, ip net.IP) bool {
