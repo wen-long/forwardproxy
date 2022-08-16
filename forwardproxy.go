@@ -504,13 +504,79 @@ func (h Handler) dialContextCheckACL(ctx context.Context, network, hostPort stri
 			return nil, caddyhttp.Error(http.StatusForbidden, fmt.Errorf("no allowed IP addresses for %s", host))
 		}
 	}
+	return dialParallel(ctx, hostPort)
+}
 
-	// this should follow gai.conf rules
-	conn, err = h.dialContext(ctx, network, hostPort)
-	if err == nil {
-		return conn, nil
+// modify from golang dial.go
+// prefer ipv4 if fallback timeout is tolerated
+func dialParallel(ctx context.Context, hostPort string) (net.Conn, error) {
+	returned := make(chan struct{})
+	defer close(returned)
+
+	type dialResult struct {
+		net.Conn
+		error
+		primary bool
+		done    bool
 	}
-	return nil, nil
+	results := make(chan dialResult) // unbuffered
+
+	startRacer := func(ctx context.Context, primary bool) {
+		var c net.Conn
+		var err error
+		if primary {
+			c, err = net.Dial("tcp4", hostPort)
+		} else {
+			c, err = net.Dial("tcp6", hostPort)
+		}
+		select {
+		case results <- dialResult{Conn: c, error: err, primary: primary, done: true}:
+		case <-returned:
+			if c != nil {
+				c.Close()
+			}
+		}
+	}
+
+	var primary, fallback dialResult
+
+	// Start the main racer.
+	primaryCtx, primaryCancel := context.WithCancel(ctx)
+	defer primaryCancel()
+	go startRacer(primaryCtx, true)
+
+	// Start the timer for the fallback racer.
+	fallbackTimer := time.NewTimer(time.Second)
+	defer fallbackTimer.Stop()
+
+	for {
+		select {
+		case <-fallbackTimer.C:
+			fallbackCtx, fallbackCancel := context.WithCancel(ctx)
+			defer fallbackCancel()
+			go startRacer(fallbackCtx, false)
+
+		case res := <-results:
+			if res.error == nil {
+				return res.Conn, nil
+			}
+			if res.primary {
+				primary = res
+			} else {
+				fallback = res
+			}
+			if primary.done && fallback.done {
+				return nil, primary.error
+			}
+			if res.primary && fallbackTimer.Stop() {
+				// If we were able to stop the timer, that means it
+				// was running (hadn't yet started the fallback), but
+				// we just got an error on the primary path, so start
+				// the fallback immediately (in 0 nanoseconds).
+				fallbackTimer.Reset(0)
+			}
+		}
+	}
 }
 
 func (h Handler) hostIsAllowed(hostname string, ip net.IP) bool {
