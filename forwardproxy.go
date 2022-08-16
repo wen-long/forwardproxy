@@ -457,6 +457,7 @@ func (h Handler) dialContextCheckACL(ctx context.Context, network, hostPort stri
 
 	// in case IP was provided, net.LookupIP will simply return it
 	IPs, err := net.LookupIP(host)
+	fmt.Println(host, IPs)
 	if err != nil {
 		// return nil, &proxyError{S: fmt.Sprintf("Lookup of %s failed: %v", host, err),
 		// Code: http.StatusBadGateway}
